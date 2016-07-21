@@ -3,24 +3,24 @@
 # tournament.py -- implementation of a Swiss-system tournament
 #
 
-import bleach
 import psycopg2
 
 
-def connect():
-    """Connect to the PostgreSQL database.  Returns a database connection."""
-    return psycopg2.connect("dbname=tournament")
+def connect(database_name="tournament"):
+    """Connect to the PostgreSQL database.  Returns a database connection and a
+    cursor."""
+    try:
+        db = psycopg2.connect("dbname={}".format(database_name))
+        cursor = db.cursor()
+        return db, cursor
+    except:
+        print("Error on connecting to PostgreSQL database.")
 
 
 def deleteMatches():
     """Remove all the match records from the database."""
-    conn = connect()
-    c = conn.cursor()
+    conn, c = connect()
     query = "DELETE FROM matches"
-    c.execute(query)
-    query = "UPDATE players SET matches = 0"
-    c.execute(query)
-    query = "UPDATE players SET wins = 0"
     c.execute(query)
     conn.commit()
     conn.close()
@@ -28,8 +28,7 @@ def deleteMatches():
 
 def deletePlayers():
     """Remove all the player records from the database."""
-    conn = connect()
-    c = conn.cursor()
+    conn, c = connect()
     query = "DELETE FROM players CASCADE"
     c.execute(query)
     conn.commit()
@@ -38,11 +37,10 @@ def deletePlayers():
 
 def countPlayers():
     """Returns the number of players currently registered."""
-    conn = connect()
-    c = conn.cursor()
+    conn, c = connect()
     query = "SELECT count(id) AS num FROM players"
     c.execute(query)
-    count = int(c.fetchall()[0][0])
+    count = int(c.fetchone()[0])
     conn.close()
     return count
 
@@ -59,11 +57,9 @@ def registerPlayer(name):
     Args:
       name: the player's full name (need not be unique).
     """
-    safe_name = bleach.clean(name)
-    conn = connect()
-    c = conn.cursor()
+    conn, c = connect()
     query = "INSERT INTO players (name) VALUES (%s)"
-    c.execute(query, (str(safe_name),))
+    c.execute(query, (str(name),))
     conn.commit()
     conn.close()
 
@@ -81,9 +77,8 @@ def playerStandings():
         wins: the number of matches the player has won
         matches: the number of matches the player has played
     """
-    conn = connect()
-    c = conn.cursor()
-    query = "SELECT * FROM players ORDER BY wins DESC"
+    conn, c = connect()
+    query = "SELECT * FROM playerstandings ORDER BY wins DESC"
     c.execute(query)
     standings = c.fetchall()
     conn.close()
@@ -97,18 +92,10 @@ def reportMatch(winner, loser):
       winner:  the id number of the player who won
       loser:  the id number of the player who lost
     """
-    conn = connect()
-    c = conn.cursor()
-    # First, insert the match into the matches table.
+    conn, c = connect()
+    # insert the match into the matches table.
     query = "INSERT INTO matches (winner, loser) VALUES (%d, %d)" % (winner,
                                                                      loser)
-    c.execute(query)
-    # Then, update the players to reflect that they had a match.
-    query = "UPDATE players SET matches = (matches + 1) WHERE " \
-            "id = %d OR id = %d" % (winner, loser)
-    c.execute(query)
-    # Finally, update the winner in the players table with their win.
-    query = "UPDATE players SET wins = (wins + 1) WHERE id = %d" % (winner)
     c.execute(query)
     conn.commit()
     conn.close()
